@@ -586,7 +586,6 @@ class OrcamentoApp(QMainWindow):
         resultado_texto += f"Custo Terças: {self.format_currency(cobertura.get('C40', 0))}\n"
         resultado_texto += f"Custo Eitão: {self.format_currency(cobertura.get('C47', 0))}\n"
         resultado_texto += f"Custo Cumeeira: {self.format_currency(cobertura.get('C52', 0))}\n"
-        resultado_texto += f"Custo Contraventamento: {self.format_currency(cobertura.get('CONTRAVENTAMENTO', 0))}\n\n"
         
         # Estrutura
         pilares = self.calculator.results['PILARES']

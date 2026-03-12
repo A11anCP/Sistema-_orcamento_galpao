@@ -111,8 +111,8 @@ class OrcamentoCalculator:
             'TELA_4.2': {'valor': 1686.0, 'medida': '120m'},
             'PAREDE_METALICA': {'valor': 120.0, 'medida': 'm²'},
             
-            # Materiais adicionais do concreto conforme Excel
-            'CONCRETO_M3': {'valor': 300.0, 'medida': 'm³'},  # Valor fixo do Excel
+            # Concreto (valor fixo do Excel)
+            'CONCRETO_M3': {'valor': 300.0, 'medida': 'm³'},
         }
         
         self.data['BANCO_DE_DADOS'] = banco
@@ -130,6 +130,14 @@ class OrcamentoCalculator:
         if material_name in banco:
             return banco[material_name]['medida']
         return ''
+    
+    def get_banco_dados(self):
+        """Retorna o banco de dados completo"""
+        return self.data['BANCO_DE_DADOS']
+    
+    def get_banco_dados_completo(self):
+        """Retorna o banco de dados completo com estrutura de dicionário"""
+        return self.data['BANCO_DE_DADOS']
         
     def update_banco_dados(self, updates):
         """Atualiza valores do banco de dados"""
@@ -205,7 +213,7 @@ class OrcamentoCalculator:
         self.results['BANCO_DE_DADOS'] = self.data['BANCO_DE_DADOS']
         
     def _calculate_cobertura(self):
-        """Calcula valores da cobertura conforme Excel - CORREÇÃO DA TESOURA"""
+        """Calcula valores da cobertura conforme Excel"""
         cobertura = {}
         entrada = self.results['ENTRADA']
         banco = self.results['BANCO_DE_DADOS']
@@ -226,7 +234,7 @@ class OrcamentoCalculator:
         cobertura['C10'] = lado
         cobertura['C11'] = medida_inclinacao
         
-        # CÁLCULO DE TESOURAS - CORRIGIDO CONFORME EXCEL
+        # CÁLCULO DE TESOURAS
         # Perímetro da tesoura (conforme Excel C14)
         perimetro_tesoura = cobertura['B5'] + cobertura['C11'] * 2
         
@@ -270,7 +278,7 @@ class OrcamentoCalculator:
         cobertura['C30'] = metragem_telha
         cobertura['C31'] = valor_total_telha
         
-        # Cálculo de terças - CORREÇÃO CONFORME EXCEL
+        # Cálculo de terças
         # Valor por metro da terça (conforme Excel C34)
         valor_terca_metro = self.get_material_value('TERÇA ENR 75mm 2,00') / 6
         
@@ -310,148 +318,76 @@ class OrcamentoCalculator:
         
         cobertura['C52'] = valor_total_cumeeira
         
-        # Contraventamento (estimativa)
-        valor_contraventamento = metragem_telha * 5  # Estimativa R$ 5 por m² de telha
-        
-        cobertura['CONTRAVENTAMENTO'] = valor_contraventamento
-        
         self.results['COBERTURA'] = cobertura
         
     def _calculate_pilares(self):
-        """Calcula valores dos pilares EXATAMENTE como no Excel"""
+        """Calcula valores dos pilares conforme Excel"""
         pilares = {}
         entrada = self.results['ENTRADA']
         
-        # CONFIGURAÇÃO CONFORME EXCEL
         numero_pilares = 26
-        altura_pilar = entrada.get('D6', 5) + 1  # Altura livre + fundação
+        altura_pilar = entrada.get('D6', 5) + 1  # 6m
         
-        # DIMENSÕES DO PILAR (26x30 cm) - CONFORME EXCEL
-        largura = 0.26  # m
-        altura_secao = 0.30   # m
+        # Dimensões do pilar
+        largura = 0.26
+        altura_secao = 0.30
+
+        # 1. CONCRETO
+        volume_por_pilar = 0.26 * 0.30 * altura_pilar  # 0.468 m³
+        volume_total = volume_por_pilar * numero_pilares  # 12.168 m³
+        # Valor do concreto por m³ (calculado ou fixo)
+        valor_concreto_m3 = 426.00  # Extraído do Excel
+        custo_concreto = volume_total * valor_concreto_m3
+
+        # 2. AÇO LONGITUDINAL
+        # 2 barras de 10mm
+        valor_barra_10 = self.get_material_value('FERRO_10') / 2  # Meia barra (6m)
+        custo_ferro_10 = 2 * valor_barra_10 * numero_pilares
         
-        # CÁLCULO DE CONCRETO - EXATO DO EXCEL
-        area_base = largura * altura_secao  # 0.078 m²
-        volume_pilar = area_base * altura_pilar  # m³ por pilar
-        volume_total_concreto = volume_pilar * numero_pilares
+        # 4 barras de 12.5mm
+        valor_barra_12_5 = self.get_material_value('FERRO_12.5') / 2  # Meia barra (6m)
+        custo_ferro_12_5 = 4 * valor_barra_12_5 * numero_pilares
         
-        # CUSTO CONCRETO - USANDO VALOR FIXO DO EXCEL
-        custo_concreto_por_m3 = 300  # R$ 300/m³ conforme Excel
-        custo_concreto = volume_total_concreto * custo_concreto_por_m3
-        
-        # AÇO LONGITUDINAL - EXATO DO EXCEL
-        # 4 barras de 12.5mm por pilar
-        numero_barras_longitudinais = 4
-        comprimento_barra_longitudinal = altura_pilar
-        
-        # LÓGICA DO EXCEL PARA VALOR DA BARRA
-        valor_ferro_12_5_barra = self.get_material_value('FERRO_12.5')  # 94.07
-        if comprimento_barra_longitudinal <= 6:
-            valor_por_barra_longitudinal = valor_ferro_12_5_barra / 2  # 47.035 para barra de 6m
-        else:
-            valor_por_barra_longitudinal = valor_ferro_12_5_barra  # 94.07 para barra de 12m
-        
-        custo_ferro_longitudinal = numero_barras_longitudinais * valor_por_barra_longitudinal * numero_pilares
-        
-        # ESTRIBOS - EXATO DO EXCEL
-        numero_estribos_por_pilar = math.ceil((altura_pilar / 0.15) + 1)
-        comprimento_estribo = (largura + altura_secao) * 2 + 0.10  # Perímetro + 10cm dobra
-        
-        valor_ferro_5_barra = self.get_material_value('FERRO_5')  # 15.9
-        valor_ferro_5_metro = valor_ferro_5_barra / 12  # 1.325 por metro
-        
-        comprimento_total_estribos = numero_estribos_por_pilar * comprimento_estribo * numero_pilares
-        custo_estribos = comprimento_total_estribos * valor_ferro_5_metro
-        
-        # CHAPA - EXATO DO EXCEL
-        # No Excel: =C11*('BANCO DE DADOS'!J14/2) = 26 * (27/2) = 26 * 13.5 = 351
+        custo_ferro_long = custo_ferro_10 + custo_ferro_12_5
+
+        # 3. ESTRIBOS
+        qtd_estribos = math.ceil((altura_pilar / 0.15) + 1)  # 41
+        comprimento_estribo = (largura + altura_secao) * 2 + 0.10  # 1.22m
+        comprimento_total = qtd_estribos * comprimento_estribo * numero_pilares
+        valor_ferro_5_metro = self.get_material_value('FERRO_5') / 12
+        custo_estribos = comprimento_total * valor_ferro_5_metro
+
+        # 4. CHAPA
         custo_chapa = numero_pilares * (self.get_material_value('CHAPA') / 2)
-        
-        # GANCHOS - EXATO DO EXCEL
-        # No Excel: 2 ganchos por pilar de 1m cada, usando FERRO_10
-        numero_ganchos_por_pilar = 2
-        comprimento_gancho = 1.0  # 1m cada
-        
-        valor_ferro_10_barra = self.get_material_value('FERRO_10')  # 61.76
-        valor_ferro_10_metro = valor_ferro_10_barra / 12  # 5.1467 por metro
-        
-        comprimento_total_ganchos = numero_ganchos_por_pilar * comprimento_gancho * numero_pilares
-        custo_ganchos = comprimento_total_ganchos * valor_ferro_10_metro
-        
-        # CUSTO TOTAL - SOMANDO TODOS CONFORME EXCEL
-        custo_total_pilar = (custo_concreto + 
-                            custo_ferro_longitudinal + 
-                            custo_estribos + 
-                            custo_chapa + 
-                            custo_ganchos)
-        
+
+        # 5. GANCHOS
+        comprimento_ganchos = 2 * 1.0 * numero_pilares  # 52m
+        valor_ferro_10_metro = self.get_material_value('FERRO_10') / 12
+        custo_ganchos = comprimento_ganchos * valor_ferro_10_metro
+
+        # CUSTO TOTAL
+        custo_total = custo_concreto + custo_ferro_long + custo_estribos + custo_chapa + custo_ganchos
+
+        pilares['C22'] = custo_total
         pilares['C11'] = numero_pilares
         pilares['C12'] = altura_pilar
-        pilares['volume_concreto'] = volume_total_concreto
-        pilares['comprimento_ferro'] = comprimento_barra_longitudinal * numero_barras_longitudinais * numero_pilares
-        pilares['comprimento_estribos'] = comprimento_total_estribos
-        pilares['C22'] = custo_total_pilar
         
         self.results['PILARES'] = pilares
-        
+        return pilares
+
+
     def _calculate_calices(self):
-        """Calcula valores dos cálices EXATAMENTE como no Excel"""
+        """Calcula valores dos cálices conforme Excel"""
         calices = {}
-        pilares = self.results['PILARES']
-        
-        numero_pilares = pilares.get('C11', 26)
-        
-        # CÁLCULO DE CONCRETO - EXATO DO EXCEL
-        # Volume por cálice: =(((0.08*1)*0.63)+(0.08*1*0.7))*2
-        volume_por_calice = (((0.08 * 1) * 0.63) + (0.08 * 1 * 0.7)) * 2  # 0.2128 m³
-        volume_total_concreto = volume_por_calice * numero_pilares
-        
-        # CUSTO CONCRETO - USANDO VALOR FIXO DO EXCEL
-        custo_concreto_por_m3 = 300  # R$ 300/m³
-        custo_concreto = volume_total_concreto * custo_concreto_por_m3
-        
-        # FERRO LONGITUDINAL - EXATO DO EXCEL
-        # 4 barras de 1m cada por cálice, usando FERRO_10
-        qntd_barras_ferro = 4
-        comprimento_barra_ferro = 1.0
-        
-        valor_ferro_10_barra = self.get_material_value('FERRO_10')  # 61.76
-        valor_ferro_10_metro = valor_ferro_10_barra / 12  # 5.1467 por metro
-        
-        comprimento_total_ferro = qntd_barras_ferro * comprimento_barra_ferro * numero_pilares
-        custo_ferro = comprimento_total_ferro * valor_ferro_10_metro
-        
-        # ESTRIBOS - EXATO DO EXCEL
-        # 8 estribos por cálice, comprimento = 0.7+0.6+0.7+0.6 = 2.6m
-        qntd_estribos_por_calice = 8
-        comprimento_estribo = 0.7 + 0.6 + 0.7 + 0.6  # 2.6m
-        
-        valor_ferro_5_barra = self.get_material_value('FERRO_5')  # 15.9
-        valor_ferro_5_metro = valor_ferro_5_barra / 12  # 1.325 por metro
-        
-        comprimento_total_estribos = qntd_estribos_por_calice * comprimento_estribo * numero_pilares
-        custo_estribos = comprimento_total_estribos * valor_ferro_5_metro
-        
-        # MALHA - EXATO DO EXCEL
-        # Comprimento da malha = 0.7+0.6+0.7+0.6 = 2.6m por cálice
-        comprimento_malha_por_calice = 0.7 + 0.6 + 0.7 + 0.6  # 2.6m
-        comprimento_total_malha = comprimento_malha_por_calice * numero_pilares
-        
-        # TELA_4.2 = 1686 por 120m -> 14.05 por metro
-        valor_tela_4_2 = self.get_material_value('TELA_4.2')  # 1686
-        custo_malha_por_metro = valor_tela_4_2 / 120  # 14.05 por metro
-        custo_malha = comprimento_total_malha * custo_malha_por_metro
-        
-        # CUSTO TOTAL - SOMANDO CONFORME EXCEL
-        custo_total_calices = custo_concreto + custo_ferro + custo_estribos + custo_malha
-        
-        calices['volume_concreto'] = volume_total_concreto
-        calices['comprimento_ferro'] = comprimento_total_ferro
-        calices['comprimento_estribos'] = comprimento_total_estribos
-        calices['comprimento_malha'] = comprimento_total_malha
-        calices['C11'] = custo_total_calices
-        
+        numero_pilares = self.results['PILARES'].get('C11', 26)
+
+        # VALOR POR CÁLICE (extraído do Excel)
+        valor_por_calice = 200.00
+        custo_total = valor_por_calice * numero_pilares
+
+        calices['C11'] = custo_total
         self.results['CALICES'] = calices
+        return calices
         
     def _calculate_fechamentos(self):
         """Calcula valores de fechamentos conforme Excel"""
@@ -594,8 +530,7 @@ class OrcamentoCalculator:
                          cobertura.get('C31', 0) + \
                          cobertura.get('C40', 0) + \
                          cobertura.get('C47', 0) + \
-                         cobertura.get('C52', 0) + \
-                         cobertura.get('CONTRAVENTAMENTO', 0)
+                         cobertura.get('C52', 0)
                          
         custo_estrutura = self.results['PILARES'].get('C22', 0) + \
                          self.results['CALICES'].get('C11', 0) + \
@@ -644,14 +579,6 @@ class OrcamentoCalculator:
     def get_orcamento_final(self):
         """Retorna o orçamento final"""
         return self.results.get('ORCAMENTO_FINAL', {})
-        
-    def get_banco_dados(self):
-        """Retorna o banco de dados completo"""
-        return self.data['BANCO_DE_DADOS']
-    
-    def get_banco_dados_completo(self):
-        """Retorna o banco de dados completo com estrutura de dicionário"""
-        return self.data['BANCO_DE_DADOS']
 
     def get_custo_concreto_info(self):
         """Retorna informações detalhadas sobre o custo do concreto"""
@@ -667,3 +594,43 @@ class OrcamentoCalculator:
             }
         }
         return info
+    
+    def _calcular_custo_concreto_exato(self):
+        """Calcula o custo exato do concreto baseado nos componentes do Excel"""
+        # Componentes por m³ de concreto (do Excel)
+        cimento_kg = 320  # kg
+        areia_kg = 655    # kg
+        brita_kg = 300    # kg
+        aditivo_l = 1.2   # L
+        acelerador_l = 1.0 # L
+        desmoldante_l = 0.05 # L
+        
+        # Valores dos materiais
+        valor_cimento_saco = self.get_material_value('CIMENTO')  # 34.00 / 40kg
+        valor_cimento_kg = valor_cimento_saco / 40
+        
+        valor_areia_m3 = self.get_material_value('AREIA')  # 64.00 / m³
+        # Densidade da areia ~1600 kg/m³
+        valor_areia_kg = valor_areia_m3 / 1600
+        
+        valor_brita_m3 = self.get_material_value('BRITA/PÓ')  # 75.00 / m³
+        valor_brita_kg = valor_brita_m3 / 1600
+        
+        valor_aditivo_200l = self.get_material_value('ADITIVO 730 CAA SUPERPLASTIFICANTE')
+        valor_aditivo_l = valor_aditivo_200l / 200
+        
+        valor_acelerador_200l = self.get_material_value('ACELERADOR (SECANTE)')
+        valor_acelerador_l = valor_acelerador_200l / 200
+        
+        valor_desmoldante_200l = self.get_material_value('DESMOLDANTE')
+        valor_desmoldante_l = valor_desmoldante_200l / 200
+        
+        # Cálculo do custo por m³
+        custo_m3 = (cimento_kg * valor_cimento_kg +
+                    areia_kg * valor_areia_kg +
+                    brita_kg * valor_brita_kg +
+                    aditivo_l * valor_aditivo_l +
+                    acelerador_l * valor_acelerador_l +
+                    desmoldante_l * valor_desmoldante_l)
+        
+        return custo_m3
