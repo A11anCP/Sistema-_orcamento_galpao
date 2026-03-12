@@ -465,9 +465,14 @@ class OrcamentoApp(QMainWindow):
         layout.addWidget(grupo_frete)
         
         # Observação sobre margem e nota
+      
         grupo_observacao = QGroupBox("Observações")
         layout_observacao = QVBoxLayout()
-        self.label_observacao = QLabel("• Margem de lucro aplicada: 100% sobre o custo total + frete\n• Nota fiscal: NÃO")
+        self.label_observacao = QLabel(
+            "• Margem de lucro aplicada: 100% sobre o custo base + frete\n"
+            "• Portão e projeto são adicionados APÓS a margem\n"
+            "• Nota fiscal: 12,5% (NÃO)"
+        )
         self.label_observacao.setStyleSheet("color: #666; font-style: italic;")
         layout_observacao.addWidget(self.label_observacao)
         grupo_observacao.setLayout(layout_observacao)
@@ -674,15 +679,16 @@ class OrcamentoApp(QMainWindow):
         self.labels_orcamento['custo_complementos'].setText(self.format_currency(orcamento.get('custo_complementos', 0)))
         self.labels_orcamento['custo_projeto'].setText(self.format_currency(orcamento.get('custo_projeto', 0)))
         self.labels_orcamento['frete'].setText(self.format_currency(orcamento.get('frete', 0)))
-        self.labels_orcamento['custo_total_com_frete'].setText(self.format_currency(orcamento.get('custo_com_frete', 0)))
+        self.labels_orcamento['custo_total_com_frete'].setText(self.format_currency(orcamento.get('custo_base', 0) + orcamento.get('frete', 0)))
         self.labels_orcamento['valor_total'].setText(self.format_currency(orcamento.get('valor_venda', 0)))
         
-        nota_texto = "SIM" if orcamento.get('com_nota', False) else "NÃO"
+        nota_texto = "SIM (12,5%)" if orcamento.get('com_nota', False) else "NÃO"
         self.label_observacao.setText(
-            f"• Margem de lucro aplicada: 100% sobre o custo total + frete\n"
-            f"• Projeto: calculado separadamente e somado após a margem\n"
+            f"• Margem de lucro aplicada: 100% sobre o custo base + frete\n"
+            f"• Portão: {self.format_currency(orcamento.get('custo_portao', 0))} (adicionado após margem)\n"
+            f"• Projeto: {self.format_currency(orcamento.get('custo_projeto', 0))} (adicionado após margem)\n"
             f"• Nota fiscal: {nota_texto}"
-    )
+        )
     def atualizar_info_frete(self):
         if not self.calculator:
             return
@@ -719,12 +725,14 @@ class OrcamentoApp(QMainWindow):
     def limpar_campos(self):
         """Limpa todos os campos de entrada"""
         try:
+            # Limpa campos de entrada
             for key, entry in self.entries.items():
                 if isinstance(entry, QLineEdit):
                     entry.clear()
                 elif isinstance(entry, QComboBox) and key == 'cidade':
                     entry.setCurrentText('IRINEÓPOLIS')
             
+            # Reseta comboboxes
             self.combo_telha.setCurrentIndex(0)
             self.combo_cobertura.setCurrentIndex(1)
             self.combo_fechamento.setCurrentIndex(0)
@@ -738,10 +746,13 @@ class OrcamentoApp(QMainWindow):
             self.combo_portao.setCurrentIndex(0)
             self.combo_nota.setCurrentIndex(0)
             
+            # Limpa campos do portão
             self.entry_portao_largura.setText("5")
             self.entry_portao_altura.setText("5")
+            self.entry_portao_quantidade.setText("1")
             self.grupo_portao.setVisible(False)
             
+            # Limpa resultados
             self.texto_resultados.clear()
             for label in self.labels_orcamento.values():
                 label.setText("R$ 0,00")

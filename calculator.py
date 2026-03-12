@@ -536,11 +536,11 @@ class OrcamentoCalculator:
         self.results['FRETE'] = frete
         
     def _calculate_orcamento_final(self):
-        """Calcula o orçamento final conforme Excel - CORREÇÃO DA ORDEM"""
+        """Calcula o orçamento final conforme Excel - ORDEM CORRETA"""
         orcamento = {}
         entrada = self.results['ENTRADA']
         
-        # Soma todos os custos de materiais (SEM o projeto ainda)
+        # Soma todos os custos de materiais (SEM projeto e SEM portão ainda)
         cobertura = self.results['COBERTURA']
         custo_cobertura = cobertura.get('C25', 0) + \
                         cobertura.get('C31', 0) + \
@@ -555,43 +555,49 @@ class OrcamentoCalculator:
                         
         custo_complementos = self.results['FECHAMENTOS'].get('C9', 0) + \
                         self.results['FECHAMENTOS'].get('PLATIBANDA', 0) + \
-                        self.results['LAJE'].get('B5', 0) + \
-                        self.results['PORTAO'].get('C11', 0)
+                        self.results['LAJE'].get('B5', 0)
         
-        # CUSTO TOTAL DOS MATERIAIS (sem projeto)
-        custo_materiais = custo_cobertura + custo_estrutura + custo_complementos
+        # CUSTO BASE (sem projeto e sem portão)
+        custo_base = custo_cobertura + custo_estrutura + custo_complementos
         
-        # CÁLCULO DO PROJETO (se incluído)
+        # FRETE
+        frete = self.results['FRETE'].get('valor_final', 0)
+        
+        # PORTAO (se houver)
+        custo_portao = self.results['PORTAO'].get('C11', 0)
+        
+        # PROJETO (se incluído)
         tem_projeto = entrada.get('C18', 'SIM') == 'SIM'
         custo_projeto = 0
         if tem_projeto:
             area = entrada.get('D3', 0)
             custo_projeto = area * 15  # R$ 15/m²
         
-        # FRETE
-        frete = self.results['FRETE'].get('valor_final', 0)
-        
         # ORDEM CORRETA DOS CÁLCULOS:
-        # 1. Primeiro: (custo_materiais + frete) * 2
-        # 2. Depois: + custo_projeto
-        custo_com_frete = custo_materiais + frete
+        # 1. (custo_base + frete) * 2
+        # 2. + custo_portao
+        # 3. + custo_projeto
+        custo_com_frete = custo_base + frete
         valor_com_margem = custo_com_frete * 2  # Margem de 100%
-        valor_venda = valor_com_margem + custo_projeto  # Soma o projeto DEPOIS da margem
+        valor_com_portao = valor_com_margem + custo_portao
+        valor_venda = valor_com_portao + custo_projeto
         
-        # Se tiver nota fiscal, aplica sobre o valor total
+        # NOTA FISCAL: 12,5% (ATUALIZADO)
         com_nota = entrada.get('COM_NOTA', 'NÃO') == 'SIM'
         if com_nota:
-            valor_venda = valor_venda * 1.08
+            valor_venda = valor_venda * 1.125  # 12,5% de acréscimo
         
         # Salva todos os valores para referência
-        orcamento['custo_materiais'] = custo_materiais
+        orcamento['custo_base'] = custo_base
         orcamento['custo_cobertura'] = custo_cobertura
         orcamento['custo_estrutura'] = custo_estrutura
         orcamento['custo_complementos'] = custo_complementos
+        orcamento['custo_portao'] = custo_portao
         orcamento['custo_projeto'] = custo_projeto
         orcamento['frete'] = frete
         orcamento['custo_com_frete'] = custo_com_frete
         orcamento['valor_com_margem'] = valor_com_margem
+        orcamento['valor_com_portao'] = valor_com_portao
         orcamento['valor_venda'] = valor_venda
         orcamento['com_nota'] = com_nota
         
