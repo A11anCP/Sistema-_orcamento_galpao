@@ -471,24 +471,39 @@ class OrcamentoCalculator:
         self.results['LAJE'] = laje
         
     def _calculate_portao(self):
-        """Calcula valores do portão conforme Excel"""
+        """Calcula valores do portão: R$ 350,00 por m² × quantidade"""
         portao = {}
         entrada = self.results['ENTRADA']
         
         tem_portao = entrada.get('C21', 'NÃO') == 'SIM'
         
         if tem_portao:
-            largura = entrada.get('PORTAO_LARGURA', 5)
-            altura = entrada.get('PORTAO_ALTURA', 5)
-            area_portao = largura * altura
-            custo_por_m2 = 350  # Conforme Excel
-            quantidade = 2  # Dois portões conforme prática
+            largura = float(entrada.get('PORTAO_LARGURA', 5))
+            altura = float(entrada.get('PORTAO_ALTURA', 5))
+            quantidade = float(entrada.get('PORTAO_QUANTIDADE', 1))
             
-            portao['C11'] = area_portao * custo_por_m2 * quantidade
+            area_por_portao = largura * altura  # m² por portão
+            area_total = area_por_portao * quantidade
+            valor_por_m2 = 350  # R$ 350,00 por metro quadrado
+            
+            # Cálculo correto: área total × valor por m²
+            custo_portao = area_total * valor_por_m2
+            
+            portao['C11'] = custo_portao
+            portao['area_por_portao'] = area_por_portao
+            portao['area_total'] = area_total
+            portao['quantidade'] = quantidade
+            portao['largura'] = largura
+            portao['altura'] = altura
+            portao['valor_por_m2'] = valor_por_m2
         else:
             portao['C11'] = 0
+            portao['area_por_portao'] = 0
+            portao['area_total'] = 0
+            portao['quantidade'] = 0
             
         self.results['PORTAO'] = portao
+        return portao
         
     def _calculate_frete(self):
         """Calcula o valor do frete conforme Excel"""
@@ -521,54 +536,67 @@ class OrcamentoCalculator:
         self.results['FRETE'] = frete
         
     def _calculate_orcamento_final(self):
-        """Calcula o orçamento final conforme Excel"""
+        """Calcula o orçamento final conforme Excel - CORREÇÃO DA ORDEM"""
         orcamento = {}
         entrada = self.results['ENTRADA']
         
+        # Soma todos os custos de materiais (SEM o projeto ainda)
         cobertura = self.results['COBERTURA']
         custo_cobertura = cobertura.get('C25', 0) + \
-                         cobertura.get('C31', 0) + \
-                         cobertura.get('C40', 0) + \
-                         cobertura.get('C47', 0) + \
-                         cobertura.get('C52', 0)
-                         
+                        cobertura.get('C31', 0) + \
+                        cobertura.get('C40', 0) + \
+                        cobertura.get('C47', 0) + \
+                        cobertura.get('C52', 0) + \
+                        cobertura.get('CONTRAVENTAMENTO', 0)
+                        
         custo_estrutura = self.results['PILARES'].get('C22', 0) + \
-                         self.results['CALICES'].get('C11', 0) + \
-                         self.results['VIGAS'].get('C22', 0)
-                         
+                        self.results['CALICES'].get('C11', 0) + \
+                        self.results['VIGAS'].get('C22', 0)
+                        
         custo_complementos = self.results['FECHAMENTOS'].get('C9', 0) + \
-                           self.results['FECHAMENTOS'].get('PLATIBANDA', 0) + \
-                           self.results['LAJE'].get('B5', 0) + \
-                           self.results['PORTAO'].get('C11', 0)
+                        self.results['FECHAMENTOS'].get('PLATIBANDA', 0) + \
+                        self.results['LAJE'].get('B5', 0) + \
+                        self.results['PORTAO'].get('C11', 0)
         
+        # CUSTO TOTAL DOS MATERIAIS (sem projeto)
+        custo_materiais = custo_cobertura + custo_estrutura + custo_complementos
+        
+        # CÁLCULO DO PROJETO (se incluído)
         tem_projeto = entrada.get('C18', 'SIM') == 'SIM'
         custo_projeto = 0
         if tem_projeto:
             area = entrada.get('D3', 0)
-            custo_projeto = area * 15
+            custo_projeto = area * 15  # R$ 15/m²
         
-        custo_total_materiais = custo_cobertura + custo_estrutura + custo_complementos + custo_projeto
-        
+        # FRETE
         frete = self.results['FRETE'].get('valor_final', 0)
-        custo_total_com_frete = custo_total_materiais + frete
         
-        valor_venda = custo_total_com_frete * 2
+        # ORDEM CORRETA DOS CÁLCULOS:
+        # 1. Primeiro: (custo_materiais + frete) * 2
+        # 2. Depois: + custo_projeto
+        custo_com_frete = custo_materiais + frete
+        valor_com_margem = custo_com_frete * 2  # Margem de 100%
+        valor_venda = valor_com_margem + custo_projeto  # Soma o projeto DEPOIS da margem
         
+        # Se tiver nota fiscal, aplica sobre o valor total
         com_nota = entrada.get('COM_NOTA', 'NÃO') == 'SIM'
         if com_nota:
             valor_venda = valor_venda * 1.08
         
-        orcamento['custo_total_materiais'] = custo_total_materiais
+        # Salva todos os valores para referência
+        orcamento['custo_materiais'] = custo_materiais
         orcamento['custo_cobertura'] = custo_cobertura
         orcamento['custo_estrutura'] = custo_estrutura
         orcamento['custo_complementos'] = custo_complementos
         orcamento['custo_projeto'] = custo_projeto
         orcamento['frete'] = frete
-        orcamento['custo_total_com_frete'] = custo_total_com_frete
+        orcamento['custo_com_frete'] = custo_com_frete
+        orcamento['valor_com_margem'] = valor_com_margem
         orcamento['valor_venda'] = valor_venda
         orcamento['com_nota'] = com_nota
         
         self.results['ORCAMENTO_FINAL'] = orcamento
+        return orcamento
         
     def get_result(self, sheet, cell):
         """Obtém um resultado específico"""

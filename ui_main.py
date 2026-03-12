@@ -40,9 +40,6 @@ class OrcamentoApp(QMainWindow):
         
         self.setCentralWidget(self.tabs)
         
-        # Barra de status
-        self.statusBar().showMessage('Sistema de Orçamento Pronto')
-        
     def create_entrada_tab(self):
         widget = QWidget()
         layout = QVBoxLayout()
@@ -59,11 +56,11 @@ class OrcamentoApp(QMainWindow):
         
         self.entries = {}
         
-        # Campos de entrada
+        # Campos de entrada - AGORA VAZIOS
         campos = [
-            ('Frente (m):', 'frente', '9'),
-            ('Lateral (m):', 'lateral', '60'),
-            ('Altura Livre (m):', 'altura', '5'),
+            ('Frente (m):', 'frente', ''),
+            ('Lateral (m):', 'lateral', ''),
+            ('Altura Livre (m):', 'altura', ''),
             ('Nome do Cliente:', 'cliente_nome', ''),
             ('Telefone:', 'telefone', ''),
             ('Cidade:', 'cidade', 'IRINEÓPOLIS'),
@@ -84,8 +81,14 @@ class OrcamentoApp(QMainWindow):
                 self.entries[key] = combo
                 layout_basico.addWidget(combo, row, 1)
             else:
-                entry = QLineEdit(default)
-                if key == 'telefone':
+                entry = QLineEdit()
+                if key == 'frente':
+                    entry.setPlaceholderText('Ex: 10')
+                elif key == 'lateral':
+                    entry.setPlaceholderText('Ex: 20')
+                elif key == 'altura':
+                    entry.setPlaceholderText('Ex: 5')
+                elif key == 'telefone':
                     entry.setPlaceholderText('(47) 99999-9999')
                 self.entries[key] = entry
                 layout_basico.addWidget(entry, row, 1)
@@ -119,7 +122,7 @@ class OrcamentoApp(QMainWindow):
         self.combo_cobertura.setCurrentText('DUAS ÁGUAS')
         layout_espec.addWidget(self.combo_cobertura, 1, 1)
         
-        # Opcionais - conforme Excel
+        # Opcionais
         layout_espec.addWidget(QLabel("Fechamento:"), 2, 0)
         self.combo_fechamento = QComboBox()
         self.combo_fechamento.addItems(['NÃO', 'SIM'])
@@ -175,23 +178,29 @@ class OrcamentoApp(QMainWindow):
         grupo_espec.setLayout(layout_espec)
         scroll_layout.addWidget(grupo_espec)
         
-        # Grupo: Dimensões do Portão (apenas se portão for SIM)
+        # Grupo: Dimensões do Portão (agora com quantidade)
         self.grupo_portao = QGroupBox("Dimensões do Portão")
         layout_portao = QGridLayout()
         
-        layout_portao.addWidget(QLabel("Largura do Portão (m):"), 0, 0)
+        layout_portao.addWidget(QLabel("Largura (m):"), 0, 0)
         self.entry_portao_largura = QLineEdit("5")
         layout_portao.addWidget(self.entry_portao_largura, 0, 1)
         
-        layout_portao.addWidget(QLabel("Altura do Portão (m):"), 1, 0)
+        layout_portao.addWidget(QLabel("Altura (m):"), 1, 0)
         self.entry_portao_altura = QLineEdit("5")
         layout_portao.addWidget(self.entry_portao_altura, 1, 1)
+        
+        # NOVO: Campo para quantidade de portões
+        layout_portao.addWidget(QLabel("Quantidade:"), 2, 0)
+        self.entry_portao_quantidade = QLineEdit("1")
+        self.entry_portao_quantidade.setPlaceholderText("1")
+        layout_portao.addWidget(self.entry_portao_quantidade, 2, 1)
         
         self.grupo_portao.setLayout(layout_portao)
         self.grupo_portao.setVisible(False)
         scroll_layout.addWidget(self.grupo_portao)
         
-        # Conecta o sinal para mostrar/ocultar grupo do portão
+        # Conecta o sinal
         self.combo_portao.currentTextChanged.connect(self.toggle_grupo_portao)
         
         # Botões de ação
@@ -514,11 +523,17 @@ class OrcamentoApp(QMainWindow):
                 from calculator import OrcamentoCalculator
                 self.calculator = OrcamentoCalculator()
             
-            # Coleta dados de entrada
+            # Coleta dados de entrada - com tratamento para campos vazios
+            def get_float(entry, default=0):
+                try:
+                    return float(entry.text()) if entry.text().strip() else default
+                except ValueError:
+                    return default
+            
             dados_entrada = {
-                'D4': float(self.entries['frente'].text() or 9),
-                'D5': float(self.entries['lateral'].text() or 60),
-                'D6': float(self.entries['altura'].text() or 5),
+                'D4': get_float(self.entries['frente'], 0),
+                'D5': get_float(self.entries['lateral'], 0),
+                'D6': get_float(self.entries['altura'], 5),  # Altura padrão 5 se vazio
                 'C9': self.entries['cliente_nome'].text(),
                 'C10': self.entries['cidade'].currentText(),
                 'TELEFONE': self.entries['telefone'].text(),
@@ -534,9 +549,15 @@ class OrcamentoApp(QMainWindow):
                 'C20': self.combo_vigas.currentText(),
                 'C21': self.combo_portao.currentText(),
                 'COM_NOTA': self.combo_nota.currentText(),
-                'PORTAO_LARGURA': float(self.entry_portao_largura.text() or 5),
-                'PORTAO_ALTURA': float(self.entry_portao_altura.text() or 5)
+                'PORTAO_LARGURA': get_float(self.entry_portao_largura, 5),
+                'PORTAO_ALTURA': get_float(self.entry_portao_altura, 5),
+                'PORTAO_QUANTIDADE': get_float(self.entry_portao_quantidade, 1),
             }
+            
+            # Valida campos obrigatórios
+            if dados_entrada['D4'] <= 0 or dados_entrada['D5'] <= 0:
+                QMessageBox.warning(self, "Aviso", "Preencha a frente e lateral do galpão!")
+                return
             
             # Define valores na calculadora
             for cell, value in dados_entrada.items():
@@ -640,6 +661,7 @@ class OrcamentoApp(QMainWindow):
         self.texto_resultados.setText(resultado_texto)
         
     def atualizar_orcamento_final(self):
+        """Atualiza os labels do orçamento final"""
         if not self.calculator:
             return
             
@@ -652,12 +674,15 @@ class OrcamentoApp(QMainWindow):
         self.labels_orcamento['custo_complementos'].setText(self.format_currency(orcamento.get('custo_complementos', 0)))
         self.labels_orcamento['custo_projeto'].setText(self.format_currency(orcamento.get('custo_projeto', 0)))
         self.labels_orcamento['frete'].setText(self.format_currency(orcamento.get('frete', 0)))
-        self.labels_orcamento['custo_total_com_frete'].setText(self.format_currency(orcamento.get('custo_total_com_frete', 0)))
+        self.labels_orcamento['custo_total_com_frete'].setText(self.format_currency(orcamento.get('custo_com_frete', 0)))
         self.labels_orcamento['valor_total'].setText(self.format_currency(orcamento.get('valor_venda', 0)))
         
         nota_texto = "SIM" if orcamento.get('com_nota', False) else "NÃO"
-        self.label_observacao.setText(f"• Margem de lucro aplicada: 100% sobre o custo total + frete\n• Nota fiscal: {nota_texto}")
-        
+        self.label_observacao.setText(
+            f"• Margem de lucro aplicada: 100% sobre o custo total + frete\n"
+            f"• Projeto: calculado separadamente e somado após a margem\n"
+            f"• Nota fiscal: {nota_texto}"
+    )
     def atualizar_info_frete(self):
         if not self.calculator:
             return
